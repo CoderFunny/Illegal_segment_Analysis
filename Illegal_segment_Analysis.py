@@ -21,9 +21,17 @@ def TXTFileList():
 
 # 非法号段规则
 def illegalRule(d1, d2):
-    # 前十位不相等认为是非法号段。
     res = ''
-    if d1.split(':')[1].strip()[0:10] != d2.split(':')[1].strip()[0:10]:
+    # d1格式：'start: 460017023100000,'     d2格式：'end: 460017023199999'
+    # IMSI号，共15位，判断前十位不相等认为是非法号段。
+    if len(d1.split(':')[1].rstrip(',').strip()) == 15 and len(d2.split(':')[1].strip()) == 15:
+        if d1.split(':')[1].strip()[0:10] != d2.split(':')[1].strip()[0:10]:
+            res = d1.strip() + ' ' + d2.strip()
+    # PCF号段类型为MSISDN(共13位，判断前九位是否一致认为时非法号段)
+    if len(d1.split(':')[1].rstrip(',').strip()) == 13 and len(d2.split(':')[1].strip()) == 13:
+        if d1.split(':')[1].strip()[0:9] != d2.split(':')[1].strip()[0:9]:
+            res = d1.strip() + ' ' + d2.strip()
+    if len(d1.split(':')[1].rstrip(',').strip()) != len(d2.split(':')[1].strip()):
         res = d1.strip() + ' ' + d2.strip()
     return res
 
@@ -159,9 +167,13 @@ def XLSWrite(XLSPath, illegalData):
     # 实例化一个工作表，名叫Sheet1
     sht1 = xls.add_sheet('非法号段信息')
     # 第一个参数是行，第二个参数是列，第三个参数是值,第四个参数是格式
-    sht1.write(0, 0, 'fqdn', SetFont(1))
-    sht1.write(0, 1, '号段总数', SetFont(1))
-    sht1.write(0, 2, '非法号段', SetFont(1))
+    headFont = SetFont(1)
+    bodyFont1 = SetFont(3)  # 垂直居中
+    bodyFont2 = SetFont(4)  # 水平垂直居中
+
+    sht1.write(0, 0, 'fqdn', headFont)
+    sht1.write(0, 1, '号段总数', headFont)
+    sht1.write(0, 2, '非法号段', headFont)
 
     shtNum1 = 1
 
@@ -174,17 +186,17 @@ def XLSWrite(XLSPath, illegalData):
             segNum = illData.split('=')[1]
 
             if len(illegalData[illData]):
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, fqdn, SetFont(3))
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, segNum, SetFont(4))
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, fqdn, bodyFont1)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, segNum, bodyFont2)
                 shtNum1 = rowBegin
                 for ld in illegalData[illData]:
-                    sht1.write(shtNum1, 2, ld, SetFont(4))
+                    sht1.write(shtNum1, 2, ld, bodyFont2)
                     shtNum1 = shtNum1 + 1
                 rowBegin += len(illegalData[illData])
             else:
-                sht1.write(rowBegin, 0, fqdn, SetFont(3))
-                sht1.write(rowBegin, 1, segNum, SetFont(4))
-                sht1.write(rowBegin, 2, '无', SetFont(4))
+                sht1.write(rowBegin, 0, fqdn, bodyFont1)
+                sht1.write(rowBegin, 1, segNum, bodyFont2)
+                sht1.write(rowBegin, 2, '无', bodyFont2)
                 rowBegin += 1
 
     xls.save(XLSPath)
