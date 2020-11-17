@@ -218,6 +218,7 @@ def txtWrite(illegalData):
 def main():
     # 解析xls文件到list，用于后续数据处理数据源
     logging.info('welcome to txt world.')
+    rNum = 1
     try:
         for f in TXTFileList():
             # 文件分析，提取所需数据
@@ -226,7 +227,8 @@ def main():
             # txtWrite(illegaldic)
 
             # 数据输出写入xls
-            XLSWrite(os.getcwd() + '\\illegalSegment.xls', illegaldic)
+            XLSWrite(os.getcwd() + '\\illegalSegment' + str(rNum) + '.xls', illegaldic)
+            rNum += 1
 
 
     except Exception as err:
