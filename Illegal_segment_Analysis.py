@@ -38,6 +38,7 @@ def illegalRule(d1, d2):
 
 # 解析文件，将数据放入到dict中，key表示所有非法号段，value表示fqdn
 def txtAnalysis(filePath):
+    logging.info('begin to analysis mml:%s', filePath)
     dataListTmp = []
     dataList = []
     dataLists = []
@@ -56,17 +57,6 @@ def txtAnalysis(filePath):
                 dataListTmp = []
         dataListTmp.append(dts)
     dataList.append(dataListTmp)
-    # for i in dataList:
-    #     if 'fqdn' not in i:
-    #         print(i)
-
-    #
-    # # 将数据按照‘个结果’分割，放入list数组
-    # for dts in dataLists:
-    #     dataListTmp.append(dts)
-    #     if '个结果' in dts:
-    #         dataList.append(dataListTmp)
-    #         dataListTmp = []
 
     # 循环遍历各数组
     illegaldic = {}
@@ -115,6 +105,7 @@ def txtAnalysis(filePath):
             key = fqdn + '=' + str(segNum)
             illegaldic[key] = illegalList
     file.close()
+    logging.info('end analysis mml:%s', filePath)
     return illegaldic
 
 
@@ -161,7 +152,7 @@ def SetFont(type):
 
 def XLSWrite(XLSPath, illegalData):
     # 写数据时，行计数器
-    logging.info('xls write begin')
+    logging.info('xls write begin：%s', XLSPath)
     # 实例化一个execl对象xls=工作薄
     xls = xlwt.Workbook()
     # 实例化一个工作表，名叫Sheet1
@@ -200,7 +191,7 @@ def XLSWrite(XLSPath, illegalData):
                 rowBegin += 1
 
     xls.save(XLSPath)
-    logging.info('xls write end')
+    logging.info('xls write end:%s', XLSPath)
 
 
 def txtWrite(illegalData):
@@ -217,7 +208,7 @@ def txtWrite(illegalData):
 
 def main():
     # 解析xls文件到list，用于后续数据处理数据源
-    logging.info('welcome to txt world.')
+    logging.info('welcome to illegal_segment_analysis world.')
     try:
         for f in TXTFileList():
             # 文件分析，提取所需数据
@@ -232,7 +223,7 @@ def main():
     except Exception as err:
         logging.error(err)
 
-    logging.info("end txt world")
+    logging.info("end illegal_segment_analysis world")
 
 
 if __name__ == '__main__':
