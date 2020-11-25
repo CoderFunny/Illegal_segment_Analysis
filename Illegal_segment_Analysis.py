@@ -33,6 +33,8 @@ NetwokTypeDict = {'00': '人网', '01': '物网'}
 福建:     5E0000~60FFFF       680000~68FFFF
 海南:     C00000~C0FFFF       C20000~C2FFFF
 '''
+
+# 人网AMF查询的SMF NF cache信息，不能超过如下范围
 NFCacheRange2C = {'750000': '7AFFFF', '810000': '86FFFF'}
 
 # 物网AMF查询的SMF NF cache信息，不能超过如下范围
@@ -56,7 +58,7 @@ def TXTFileList():
 
 
 # 非法号段规则
-def illegalRule(d1, d2):
+def illegalRule(d1, d2, networkType):
     res = ''
     # d1格式：'start: 460017023100000,'     d2格式：'end: 460017023199999'
     # IMSI号，共15位，判断前十位不相等认为是非法号段。
@@ -70,24 +72,41 @@ def illegalRule(d1, d2):
     if len(d1.split(':')[1].rstrip(',').strip()) != len(d2.split(':')[1].strip()):
         res = d1.strip() + ' ' + d2.strip()
 
-    # SMF TAC号段： {"start": "750000","end": "7affff"}
+    # 物网：SMF TAC号段： {"start": "750000","end": "7affff"}
     if len(d1.split(':')[1].rstrip(',').strip()) == 6 and len(d2.split(':')[1].strip()) == 6:
-        iStart = int(d1.split(':')[1].rstrip(',').strip(), 16)
-        iEnd = int(d2.split(':')[1].rstrip(',').strip(), 16)
-        flag = 0
-        for key in NFCacheRange2B:
-            iStartRange = int(key.upper(), 16)
-            iEndRange = int(NFCacheRange2B[key].upper(), 16)
-            if iStart >= iStartRange and iEnd <= iEndRange:
-                flag = 1
-                break
-        if flag == 0:
-            res = d1.strip() + ' ' + d2.strip()
+        if networkType == 'B':
+            iStart = int(d1.split(':')[1].rstrip(',').strip(), 16)
+            iEnd = int(d2.split(':')[1].rstrip(',').strip(), 16)
+            flag = 0
+            for key in NFCacheRange2B:
+                iStartRange = int(key.upper(), 16)
+                iEndRange = int(NFCacheRange2B[key].upper(), 16)
+                if iStart >= iStartRange and iEnd <= iEndRange:
+                    flag = 1
+                    break
+            if flag == 0:
+                res = d1.strip() + ' ' + d2.strip()
+
+    # 人网：SMF TAC号段： {"start": "750000","end": "7affff"}
+    if len(d1.split(':')[1].rstrip(',').strip()) == 6 and len(d2.split(':')[1].strip()) == 6:
+        if networkType == 'C':
+            iStart = int(d1.split(':')[1].rstrip(',').strip(), 16)
+            iEnd = int(d2.split(':')[1].rstrip(',').strip(), 16)
+            flag = 0
+            for key in NFCacheRange2C:
+                iStartRange = int(key.upper(), 16)
+                iEndRange = int(NFCacheRange2B[key].upper(), 16)
+                if iStart >= iStartRange and iEnd <= iEndRange:
+                    flag = 1
+                    break
+            if flag == 0:
+                res = d1.strip() + ' ' + d2.strip()
     return res
 
 
-# 解析文件，将数据放入到dict中，key表示所有非法号段，value表示fqdn
+# 解析文件，将数据放入到dict中，key表示nfInstanceId=nfType=netwokType，value表示非法号段
 def txtAnalysis(filePath):
+    logging.info('begin to analysis mml file')
     dataListTmp = []
     dataList = []
     dataLists = []
@@ -95,28 +114,32 @@ def txtAnalysis(filePath):
     for line in file.readlines():
         dataLists.append(line.decode().strip('\n\t\r').replace('"', ''))
 
-    # 将数据按照‘DSP NFCACHE: QUERYTYPE=NFID’分割，相同的放到一个list中
+    # 将数据按照‘nfInstanceId’分割
     NFID = ''
     for dts in dataLists:
-        if 'nfInstanceId:' in dts:
-            dataList.append(dataListTmp)
-            dataListTmp = []
+        if 'MENAME:' in dts:
+            if len(dataListTmp):
+                dataList.append(dataListTmp)
+                dataListTmp = []
         dataListTmp.append(dts)
     dataList.append(dataListTmp)
+    # print(len(dataList))
+    # for i in dataList:
+    #     print(i)
 
     # 循环遍历各数组
     illegaldic = {}
     for dList in dataList:
-        flag = 0
+        nameflag = 0
+        idflag = 0
         illegalList = []
+        netwokType = ''
+        nfInstanceId = ''
         segNum = 0
-        if 'nfInstanceId' in dList[0]:
-            nfInstanceId = str(dList[0].split(':')[1].rstrip(',').strip().split('-')[-1][0:6])
-
-        else:
-            continue
-        if 'nfType' in dList[1]:
-            nfType = dList[1].split(':')[1].rstrip(',').strip()
+        # 获取网络类型
+        if 'MENAME:' in dList[0]:
+            # UNC / * MEID: 0   MENAME: GD_GD_GZ_AMF800_C_HW */  解析出网络类型；_C_
+            netwokType = dList[0].split('MENAME:')[1].split('*')[0].split('_')[-2]
         for dt in range(1, len(dList)):
             # # 计算号段个数
             # if 'start' in dList[dt]:
@@ -127,22 +150,28 @@ def txtAnalysis(filePath):
                 dt3 = dList[dt + 1]
             if (dt + 15) < len(dList):
                 dt4 = dList[dt + 15]
+
+            if 'NFID=' in dList[dt] and idflag == 0:
+                # nfInstanceId = str(dList[0].split('NFID=')[1].rstrip(',').strip().split('-')[-1][0:6])
+                nfInstanceId = str(dList[dt].split('NFID=')[1].split(';')[0].split('-')[-1][0:6])
+                # print(nfInstanceId)
+                idflag = 1
+
             # 规则1:取连续相邻的start和end为一组
             if 'start' in dt1 and 'end' in dt2:
-                if len(illegalRule(dt1, dt2)):
-                    illegalList.append(illegalRule(dt1, dt2))
+                illegalSeg1 = illegalRule(dt1, dt2, netwokType)
+                if len(illegalSeg1):
+                    illegalList.append(illegalSeg1)
             # 规则2:不连续数据，有些数据中间有一空行，需要取后一行比较
             if 'start' in dt1 and 'end' not in dt2 and 'end' in dt3:
-                if len(illegalRule(dt1, dt3)):
-                    illegalList.append(illegalRule(dt1, dt3))
+                illegalSeg2 = illegalRule(dt1, dt3, netwokType)
+                if len(illegalSeg2):
+                    illegalList.append(illegalSeg2)
             # 规则3:不连续数据，dt1=start，dt2 不等于end，dt3取后16行的数据
             if 'start' in dt1 and 'end' not in dt2 and 'end' in dt4:
-                if len(illegalRule(dt1, dt4)):
-                    illegalList.append(illegalRule(dt1, dt4))
-            if 'MENAME:' in dList[dt] and flag == 0:
-                # UNC / * MEID: 0   MENAME: GD_GD_GZ_AMF800_C_HW */  解析出网络类型；_C_
-                netwokType = dList[dt].split('MENAME:')[1].split('*')[0].split('_')[-2]
-                flag = 1
+                illegalSeg3 = illegalRule(dt1, dt4, netwokType)
+                if len(illegalSeg3):
+                    illegalList.append(illegalSeg3)
 
         keyflag = 0
         # key： [nfInstanceId=nfType]     value： [非法号段]
@@ -154,11 +183,13 @@ def txtAnalysis(filePath):
                 keyflag = 1
                 break
         if keyflag == 0:
-            key = str(nfInstanceId) + '=' + str(nfType) + '=' + str(netwokType)
-            illegaldic[key] = illegalList
+            if nfInstanceId != '':
+                key = str(nfInstanceId) + '=' + str(netwokType)
+                illegaldic[key] = illegalList
     file.close()
-    for key in illegaldic:
-        print(key, ':', illegaldic[key])
+    # for key in illegaldic:
+    #     print(key, ':', illegaldic[key])
+    logging.info('begin to analysis mml file')
     return illegaldic
 
 
@@ -267,10 +298,11 @@ def XLSWrite(XLSPath, illegalData):
     # 数据写入
     # sheet1
     rowBegin = 1
+    # print(len(illegalData))
     for illData in illegalData:
+        print(illData)
         MdataDict = MatchData(illData.split('=')[0])
-        NFType = illData.split('=')[1]
-        networkType = illData.split('=')[2]
+        networkType = illData.split('=')[1]
         nType = ''
         if networkType == 'C':
             nType = '人网'
@@ -278,22 +310,27 @@ def XLSWrite(XLSPath, illegalData):
             nType = '物网'
 
         if len(illegalData[illData]):
-            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, MdataDict['NFType'], bodyFont1)
-            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, MdataDict['region'], bodyFont2)
-            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 2, 2, MdataDict['province'], bodyFont2)
-            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 3, 3, nType, bodyFont2)
-            shtNum1 = rowBegin
-            for ld in illegalData[illData]:
-                sht1.write(shtNum1, 4, ld, bodyFont1)
-                shtNum1 = shtNum1 + 1
-            rowBegin += len(illegalData[illData])
+            if len(MdataDict['NFType']) and len(MdataDict['region']):
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, MdataDict['NFType'],
+                                 bodyFont1)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, MdataDict['region'],
+                                 bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 2, 2, MdataDict['province'],
+                                 bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 3, 3, nType, bodyFont2)
+                shtNum1 = rowBegin
+                for ld in illegalData[illData]:
+                    sht1.write(shtNum1, 4, ld, bodyFont1)
+                    shtNum1 = shtNum1 + 1
+                rowBegin += len(illegalData[illData])
         else:
-            sht1.write(rowBegin, 0, MdataDict['NFType'], bodyFont1)
-            sht1.write(rowBegin, 1, MdataDict['region'], bodyFont2)
-            sht1.write(rowBegin, 2, MdataDict['province'], bodyFont2)
-            sht1.write(rowBegin, 3, nType, bodyFont2)
-            sht1.write(rowBegin, 4, '无', bodyFont1)
-            rowBegin += 1
+            if len(MdataDict['NFType']) and len(MdataDict['region']):
+                sht1.write(rowBegin, 0, MdataDict['NFType'], bodyFont1)
+                sht1.write(rowBegin, 1, MdataDict['region'], bodyFont2)
+                sht1.write(rowBegin, 2, MdataDict['province'], bodyFont2)
+                sht1.write(rowBegin, 3, nType, bodyFont2)
+                sht1.write(rowBegin, 4, '无', bodyFont1)
+                rowBegin += 1
 
     xls.save(XLSPath)
     logging.info('xls write end')
@@ -313,28 +350,26 @@ def txtWrite(illegalData):
 
 def main():
     # 解析xls文件到list，用于后续数据处理数据源
-    logging.info('welcome to txt world.')
+    logging.info('welcome to illegal Segment Analysis world.')
     rNum = 1
     try:
-        for f in TXTFileList():
-            # 文件分析，提取所需数据
-            illegaldic = txtAnalysis(f)
-            # 数据输出，写入到txt
-            # txtWrite(illegaldic)
+        mmlFileList = TXTFileList()
+        if len(mmlFileList):
+            logging.info('analysis file list:%s', mmlFileList)
+            for f in TXTFileList():
+                # 文件分析，提取所需数据
+                illegaldic = txtAnalysis(f)
 
-            # 数据输出写入xls
-            XLSWrite(os.getcwd() + '\\illegalSegment' + str(rNum) + '.xls', illegaldic)
-            rNum += 1
-
-
+                # 数据输出写入xls
+                XLSWrite(os.getcwd() + '\\illegalSegment' + str(rNum) + '.xls', illegaldic)
+                rNum += 1
+        else:
+            logging.error('there is no mml file,please check!')
     except Exception as err:
         logging.error(err)
 
-    logging.info("end txt world")
+    logging.info("end illegal Segment Analysis world")
 
 
 if __name__ == '__main__':
-    # # 750000~7AFFFF
-    # print(int('750001', 16))
-    # print(int('7AFFFF', 16))
     main()
