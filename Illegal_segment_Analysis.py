@@ -14,7 +14,7 @@ def TXTFileList():
     for root, dirs, files in os.walk(".", topdown=False):
         for name in files:
             str = os.path.join(root, name)
-            if str.split('.')[-1] == 'txt' and 'MML' in str:
+            if str.split('.')[-1] == 'txt' and 'MML' in str.upper():
                 filelist.append(str)
     return filelist
 
@@ -29,7 +29,7 @@ def illegalRule(d1, d2):
             res = d1.strip() + ' ' + d2.strip()
     # PCF号段类型为MSISDN(共13位，判断前九位是否一致认为时非法号段)
     if len(d1.split(':')[1].rstrip(',').strip()) == 13 and len(d2.split(':')[1].strip()) == 13:
-        if d1.split(':')[1].strip()[0:9] != d2.split(':')[1].strip()[0:9]:
+        if d1.split(':')[1].strip()[0:8] != d2.split(':')[1].strip()[0:8]:
             res = d1.strip() + ' ' + d2.strip()
     if len(d1.split(':')[1].rstrip(',').strip()) != len(d2.split(':')[1].strip()):
         res = d1.strip() + ' ' + d2.strip()
@@ -49,23 +49,25 @@ def txtAnalysis(filePath):
     # 将数据按照‘DSP NFCACHE: QUERYTYPE=NFID’分割，相同的放到一个list中
     NFID = ''
     for dts in dataLists:
-        if 'DSP NFCACHE: QUERYTYPE=NFID' in dts:
-            dflag = 0
-            if NFID != dts.split('NFID=')[1]:
-                NFID = dts.split('NFID=')[1]
+        if 'fqdn' in dts:
+            if len(dataListTmp):
                 dataList.append(dataListTmp)
                 dataListTmp = []
         dataListTmp.append(dts)
     dataList.append(dataListTmp)
+    # for i in dataList:
+    #     print(i)
 
     # 循环遍历各数组
     illegaldic = {}
     for dList in dataList:
-        flag = 0
         illegalList = []
         segNum = 0
         fqdn = ''
-
+        if 'fqdn' in dList[0]:
+            fqdn = dList[0].rstrip(',').split(':')[1].strip(' ')
+        else:
+            continue
         for dt in range(1, len(dList)):
             # 计算号段个数
             if 'start' in dList[dt]:
@@ -88,9 +90,6 @@ def txtAnalysis(filePath):
             if 'start' in dt1 and 'end' not in dt2 and 'end' in dt4:
                 if len(illegalRule(dt1, dt4)):
                     illegalList.append(illegalRule(dt1, dt4))
-            if 'fqdn' in dList[dt] and flag == 0:
-                fqdn = dList[dt]
-                flag = 1
 
         keyflag = 0
         # key： [fqdn:号段个数]     value： [非法号段]
@@ -166,29 +165,31 @@ def XLSWrite(XLSPath, illegalData):
     sht1.write(0, 1, '号段总数', headFont)
     sht1.write(0, 2, '非法号段', headFont)
 
+    for i in illegalData:
+        print(i, ' ', illegalData[i])
+
     shtNum1 = 1
 
     # 数据写入
     # sheet1
     rowBegin = 1
     for illData in illegalData:
-        if 'fqdn' in illData:
-            fqdn = illData.split('=')[0].rstrip(',').split(':')[1].strip(' ')
-            segNum = illData.split('=')[1]
+        fqdn = illData.split('=')[0]
+        segNum = illData.split('=')[1]
 
-            if len(illegalData[illData]):
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, fqdn, bodyFont1)
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, segNum, bodyFont2)
-                shtNum1 = rowBegin
-                for ld in illegalData[illData]:
-                    sht1.write(shtNum1, 2, ld, bodyFont2)
-                    shtNum1 = shtNum1 + 1
-                rowBegin += len(illegalData[illData])
-            else:
-                sht1.write(rowBegin, 0, fqdn, bodyFont1)
-                sht1.write(rowBegin, 1, segNum, bodyFont2)
-                sht1.write(rowBegin, 2, '无', bodyFont2)
-                rowBegin += 1
+        if len(illegalData[illData]):
+            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, fqdn, bodyFont1)
+            sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, segNum, bodyFont2)
+            shtNum1 = rowBegin
+            for ld in illegalData[illData]:
+                sht1.write(shtNum1, 2, ld, bodyFont2)
+                shtNum1 = shtNum1 + 1
+            rowBegin += len(illegalData[illData])
+        else:
+            sht1.write(rowBegin, 0, fqdn, bodyFont1)
+            sht1.write(rowBegin, 1, segNum, bodyFont2)
+            sht1.write(rowBegin, 2, 'NULL', bodyFont2)
+            rowBegin += 1
 
     xls.save(XLSPath)
     logging.info('xls write end:%s', XLSPath)
@@ -227,7 +228,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # 750000~7AFFFF
-    print(int('750001', 16))
-    print(int('7AFFFF', 16))
     main()
