@@ -67,7 +67,7 @@ def illegalRule(d1, d2, networkType):
             res = d1.strip() + ' ' + d2.strip()
     # PCF号段类型为MSISDN(共13位，判断前九位是否一致认为时非法号段)
     if len(d1.split(':')[1].rstrip(',').strip()) == 13 and len(d2.split(':')[1].strip()) == 13:
-        if d1.split(':')[1].strip()[0:9] != d2.split(':')[1].strip()[0:9]:
+        if d1.split(':')[1].strip()[0:8] != d2.split(':')[1].strip()[0:8]:
             res = d1.strip() + ' ' + d2.strip()
     if len(d1.split(':')[1].rstrip(',').strip()) != len(d2.split(':')[1].strip()):
         res = d1.strip() + ' ' + d2.strip()
@@ -107,89 +107,95 @@ def illegalRule(d1, d2, networkType):
 # 解析文件，将数据放入到dict中，key表示nfInstanceId=nfType=netwokType，value表示非法号段
 def txtAnalysis(filePath):
     logging.info('begin to analysis mml file')
-    dataListTmp = []
-    dataList = []
-    dataLists = []
-    file = open(filePath, "rb")
-    for line in file.readlines():
-        dataLists.append(line.decode().strip('\n\t\r').replace('"', ''))
+    try:
+        dataListTmp = []
+        dataList = []
+        dataLists = []
+        file = open(filePath, "rb")
+        for line in file.readlines():
+            dataLists.append(line.decode().strip('\n\t\r').replace('"', ''))
 
-    # 将数据按照‘nfInstanceId’分割
-    NFID = ''
-    for dts in dataLists:
-        if 'MENAME:' in dts:
-            if len(dataListTmp):
-                dataList.append(dataListTmp)
-                dataListTmp = []
-        dataListTmp.append(dts)
-    dataList.append(dataListTmp)
-    # print(len(dataList))
-    # for i in dataList:
-    #     print(i)
+        # 将数据按照‘nfInstanceId’分割
+        NFID = ''
+        for dts in dataLists:
+            if 'MENAME:' in dts:
+                if len(dataListTmp):
+                    dataList.append(dataListTmp)
+                    dataListTmp = []
+            dataListTmp.append(dts)
+        dataList.append(dataListTmp)
+        # print(len(dataList))
+        # for i in dataList:
+        #     print(i)
 
-    # 循环遍历各数组
-    illegaldic = {}
-    for dList in dataList:
-        nameflag = 0
-        idflag = 0
-        illegalList = []
-        netwokType = ''
-        nfInstanceId = ''
-        segNum = 0
-        # 获取网络类型
-        if 'MENAME:' in dList[0]:
-            # UNC / * MEID: 0   MENAME: GD_GD_GZ_AMF800_C_HW */  解析出网络类型；_C_
-            netwokType = dList[0].split('MENAME:')[1].split('*')[0].split('_')[-2]
-        for dt in range(1, len(dList)):
-            # # 计算号段个数
-            # if 'start' in dList[dt]:
-            #     segNum += 1
-            dt1 = dList[dt - 1]
-            dt2 = dList[dt]
-            if (dt + 1) < len(dList):
-                dt3 = dList[dt + 1]
-            if (dt + 15) < len(dList):
-                dt4 = dList[dt + 15]
+        # 循环遍历各数组
+        illegaldic = {}
+        for dList in dataList:
+            nameflag = 0
+            idflag = 0
+            illegalList = []
+            netwokType = ''
+            nfInstanceId = ''
+            segNum = 0
+            # 获取网络类型
+            if 'MENAME:' in dList[0]:
+                # UNC / * MEID: 0   MENAME: GD_GD_GZ_AMF800_C_HW */  解析出网络类型；_C_
+                netwokType = dList[0].split('MENAME:')[1].split('*')[0].split('_')[-2]
+            for dt in range(1, len(dList)):
+                # # 计算号段个数
+                # if 'start' in dList[dt]:
+                #     segNum += 1
+                dt1 = dList[dt - 1]
+                dt2 = dList[dt]
+                if (dt + 1) < len(dList):
+                    dt3 = dList[dt + 1]
+                if (dt + 15) < len(dList):
+                    dt4 = dList[dt + 15]
 
-            if 'NFID=' in dList[dt] and idflag == 0:
-                # nfInstanceId = str(dList[0].split('NFID=')[1].rstrip(',').strip().split('-')[-1][0:6])
-                nfInstanceId = str(dList[dt].split('NFID=')[1].split(';')[0].split('-')[-1][0:6])
-                # print(nfInstanceId)
-                idflag = 1
+                if 'NFID=' in dList[dt] and idflag == 0:
+                    # nfInstanceId = str(dList[0].split('NFID=')[1].rstrip(',').strip().split('-')[-1][0:6])
+                    nfInstanceId = str(dList[dt].split('NFID=')[1].split(';')[0].split('-')[-1][0:6])
+                    # print(nfInstanceId)
+                    idflag = 1
 
-            # 规则1:取连续相邻的start和end为一组
-            if 'start' in dt1 and 'end' in dt2:
-                illegalSeg1 = illegalRule(dt1, dt2, netwokType)
-                if len(illegalSeg1):
-                    illegalList.append(illegalSeg1)
-            # 规则2:不连续数据，有些数据中间有一空行，需要取后一行比较
-            if 'start' in dt1 and 'end' not in dt2 and 'end' in dt3:
-                illegalSeg2 = illegalRule(dt1, dt3, netwokType)
-                if len(illegalSeg2):
-                    illegalList.append(illegalSeg2)
-            # 规则3:不连续数据，dt1=start，dt2 不等于end，dt3取后16行的数据
-            if 'start' in dt1 and 'end' not in dt2 and 'end' in dt4:
-                illegalSeg3 = illegalRule(dt1, dt4, netwokType)
-                if len(illegalSeg3):
-                    illegalList.append(illegalSeg3)
+                # 规则1:取连续相邻的start和end为一组
+                if 'start' in dt1 and 'end' in dt2:
+                    illegalSeg1 = illegalRule(dt1, dt2, netwokType)
+                    if len(illegalSeg1):
+                        illegalList.append(illegalSeg1)
+                # 规则2:不连续数据，有些数据中间有一空行，需要取后一行比较
+                if 'start' in dt1 and 'end' not in dt2 and 'end' in dt3:
+                    illegalSeg2 = illegalRule(dt1, dt3, netwokType)
+                    if len(illegalSeg2):
+                        illegalList.append(illegalSeg2)
+                # 规则3:不连续数据，dt1=start，dt2 不等于end，dt3取后16行的数据
+                if 'start' in dt1 and 'end' not in dt2 and 'end' in dt4:
+                    illegalSeg3 = illegalRule(dt1, dt4, netwokType)
+                    if len(illegalSeg3):
+                        illegalList.append(illegalSeg3)
 
-        keyflag = 0
-        # key： [nfInstanceId=nfType]     value： [非法号段]
-        for dickey in illegaldic:
-            if nfInstanceId in dickey:
-                # key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
-                # illegaldic[key] = illegaldic.pop(dickey)
-                illegaldic[key].extend(illegalList)
-                keyflag = 1
-                break
-        if keyflag == 0:
-            if nfInstanceId != '':
-                key = str(nfInstanceId) + '=' + str(netwokType)
-                illegaldic[key] = illegalList
-    file.close()
-    # for key in illegaldic:
-    #     print(key, ':', illegaldic[key])
-    logging.info('begin to analysis mml file')
+            keyflag = 0
+            # key： [nfInstanceId=nfType]     value： [非法号段]
+            for dickey in illegaldic:
+                if nfInstanceId in dickey:
+                    # key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
+                    # illegaldic[key] = illegaldic.pop(dickey)
+                    illegaldic[key].extend(illegalList)
+                    keyflag = 1
+                    break
+            if keyflag == 0:
+                if nfInstanceId != '':
+                    key = str(nfInstanceId) + '=' + str(netwokType)
+                    illegaldic[key] = illegalList
+
+        # for key in illegaldic:
+        #     print(key, ':', illegaldic[key])
+    except Exception as err:
+        logging.error('txtAnalysis function error : %s', err)
+    finally:
+        if file:
+            file.close()
+    logging.info('end analysis mml file')
     return illegaldic
 
 
