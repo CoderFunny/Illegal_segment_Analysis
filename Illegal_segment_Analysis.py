@@ -175,12 +175,14 @@ def txtAnalysis(filePath):
                         illegalList.append(illegalSeg3)
 
             keyflag = 0
+            if nfInstanceId=='0e0780':
+                print(illegalList)
             # key： [nfInstanceId=nfType]     value： [非法号段]
             for dickey in illegaldic:
                 if nfInstanceId in dickey:
                     # key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
                     # illegaldic[key] = illegaldic.pop(dickey)
-                    illegaldic[key].extend(illegalList)
+                    illegaldic[dickey].extend(illegalList)
                     keyflag = 1
                     break
             if keyflag == 0:
@@ -241,11 +243,11 @@ def SetFont(type):
 
 
 def MatchData(nfID):
-    NFType = str(nfID[0:2])
+    NFType = str(nfID[0:2].upper())
     MDataDict = {}
-    region = str(nfID[2:4])
-    province = str(nfID[4:6])
-    NetwokType = str(nfID[6:8])
+    region = str(nfID[2:4].upper())
+    province = str(nfID[4:6].upper())
+    NetwokType = str(nfID[6:8].upper())
     flag = 0
     for NFTyeKey in NFTypeDict:
         if NFType == NFTyeKey:
@@ -306,7 +308,7 @@ def XLSWrite(XLSPath, illegalData):
     rowBegin = 1
     # print(len(illegalData))
     for illData in illegalData:
-        print(illData)
+        # print(illData,' ', illegalData[illData])
         MdataDict = MatchData(illData.split('=')[0])
         networkType = illData.split('=')[1]
         nType = ''
