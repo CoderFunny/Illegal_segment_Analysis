@@ -17,7 +17,28 @@ regionDict = {'01': '中部大区', '02': '西北大区', '03': '南部大区', 
               '05': '东部大区', '06': '北部大区', '07': '上海大区', '08': '北京大区'}
 
 # 省份映射关系
-provinceDict = {'80': '广东', '40': '广西', '20': '海南', '10': '湖南', '08': '福建'}
+# 中部大区
+provinceDict = {'01': {'80': '河南', '40': '内蒙古', '20': '湖北', '10': '山西'},
+                '02': {'80': '陕西', '40': '甘肃', '20': '宁夏', '10': '青海', '08': '新疆'},
+                '03': {'80': '广东', '40': '广西', '20': '海南', '10': '湖南', '08': '福建'},
+                '04': {'80': '四川', '40': '重庆', '20': '云南', '10': '贵州', '08': '西藏'},
+                '05': {'80': '江苏', '40': '浙江', '20': '安徽', '10': '江西'},
+                '06': {'80': '山东', '40': '河北', '20': '天津', '10': '黑龙江', '08': '吉林', '04': '辽宁'},
+                '07': {'80': '上海'},
+                '08': {'80': '北京'}}
+# 西北大区
+# 南部大区
+provinceofSouthDict = {'80': '广东', '40': '广西', '20': '海南', '10': '湖南', '08': '福建'}
+# 西南大区
+provinceofSouthwestDict = {'80': '四川', '40': '重庆', '20': '云南', '10': '贵州', '08': '西藏'}
+# 东部大区
+provinceofEastDict = {'80': '江苏', '40': '浙江', '20': '安徽', '10': '江西'}
+# 北部大区
+provinceofNorthDict = {'80': '山东', '40': '河北', '20': '天津'}
+# 上海大区
+provinceofSHDict = {'80': '上海'}
+# 北京大区
+provinceofBJDict = {'80': '北京'}
 
 # 网络类型
 NetwokTypeDict = {'00': '人网', '01': '物网'}
@@ -142,9 +163,9 @@ def txtAnalysis(filePath):
                 # UNC / * MEID: 0   MENAME: GD_GD_GZ_AMF800_C_HW */  解析出网络类型；_C_
                 netwokType = dList[0].split('MENAME:')[1].split('*')[0].split('_')[-2]
             for dt in range(1, len(dList)):
-                # # 计算号段个数
-                # if 'start' in dList[dt]:
-                #     segNum += 1
+                # 计算号段个数
+                if 'start' in dList[dt]:
+                    segNum += 1
                 dt1 = dList[dt - 1]
                 dt2 = dList[dt]
                 if (dt + 1) < len(dList):
@@ -175,19 +196,17 @@ def txtAnalysis(filePath):
                         illegalList.append(illegalSeg3)
 
             keyflag = 0
-            if nfInstanceId=='0e0780':
-                print(illegalList)
             # key： [nfInstanceId=nfType]     value： [非法号段]
             for dickey in illegaldic:
                 if nfInstanceId in dickey:
-                    # key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
-                    # illegaldic[key] = illegaldic.pop(dickey)
-                    illegaldic[dickey].extend(illegalList)
+                    key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
+                    illegaldic[key] = illegaldic.pop(dickey)
+                    illegaldic[key].extend(illegalList)
                     keyflag = 1
                     break
             if keyflag == 0:
                 if nfInstanceId != '':
-                    key = str(nfInstanceId) + '=' + str(netwokType)
+                    key = str(nfInstanceId) + ':' + str(netwokType) + '=' + str(segNum)
                     illegaldic[key] = illegalList
 
         # for key in illegaldic:
@@ -265,11 +284,13 @@ def MatchData(nfID):
     if flag == 0:
         MDataDict['region'] = ''
     flag = 0
-    for provinceKey in provinceDict:
-        if province == provinceKey:
-            MDataDict['province'] = provinceDict[provinceKey]
-            flag = 1
-            break
+    for pk in provinceDict:
+        if region == pk:
+            for provinceKey in provinceDict[pk]:
+                if province == provinceKey:
+                    MDataDict['province'] = provinceDict[pk][provinceKey]
+                    flag = 1
+                    break
     if flag == 0:
         MDataDict['province'] = ''
     flag = 0
@@ -299,7 +320,8 @@ def XLSWrite(XLSPath, illegalData):
     sht1.write(0, 1, '大区', headFont)
     sht1.write(0, 2, '省份', headFont)
     sht1.write(0, 3, '网络类型', headFont)
-    sht1.write(0, 4, '冲突号段', headFont)
+    sht1.write(0, 4, '号段总数', headFont)
+    sht1.write(0, 5, '冲突号段', headFont)
 
     shtNum1 = 1
 
@@ -309,8 +331,9 @@ def XLSWrite(XLSPath, illegalData):
     # print(len(illegalData))
     for illData in illegalData:
         # print(illData,' ', illegalData[illData])
-        MdataDict = MatchData(illData.split('=')[0])
-        networkType = illData.split('=')[1]
+        MdataDict = MatchData(illData.split(':')[0])
+        networkType = illData.split(':')[1].split('=')[0]
+        segNum = illData.split('=')[1]
         nType = ''
         if networkType == 'C':
             nType = '人网'
@@ -320,24 +343,26 @@ def XLSWrite(XLSPath, illegalData):
         if len(illegalData[illData]):
             if len(MdataDict['NFType']) and len(MdataDict['region']):
                 sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, MdataDict['NFType'],
-                                 bodyFont1)
+                                 bodyFont2)
                 sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, MdataDict['region'],
                                  bodyFont2)
                 sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 2, 2, MdataDict['province'],
                                  bodyFont2)
                 sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 3, 3, nType, bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 4, 4, segNum, bodyFont2)
                 shtNum1 = rowBegin
                 for ld in illegalData[illData]:
-                    sht1.write(shtNum1, 4, ld, bodyFont1)
+                    sht1.write(shtNum1, 5, ld, bodyFont2)
                     shtNum1 = shtNum1 + 1
                 rowBegin += len(illegalData[illData])
         else:
             if len(MdataDict['NFType']) and len(MdataDict['region']):
-                sht1.write(rowBegin, 0, MdataDict['NFType'], bodyFont1)
+                sht1.write(rowBegin, 0, MdataDict['NFType'], bodyFont2)
                 sht1.write(rowBegin, 1, MdataDict['region'], bodyFont2)
                 sht1.write(rowBegin, 2, MdataDict['province'], bodyFont2)
                 sht1.write(rowBegin, 3, nType, bodyFont2)
-                sht1.write(rowBegin, 4, '无', bodyFont1)
+                sht1.write(rowBegin, 4, segNum, bodyFont2)
+                sht1.write(rowBegin, 5, 'NULL', bodyFont2)
                 rowBegin += 1
 
     xls.save(XLSPath)
