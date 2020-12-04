@@ -73,7 +73,7 @@ def TXTFileList():
     for root, dirs, files in os.walk(".", topdown=False):
         for name in files:
             str = os.path.join(root, name)
-            if str.split('.')[-1] == 'txt' and 'MML' in str:
+            if str.split('.')[-1] == 'txt' and 'MML' in str.upper():
                 filelist.append(str)
     return filelist
 
@@ -86,7 +86,7 @@ def illegalRule(d1, d2, networkType):
     if len(d1.split(':')[1].rstrip(',').strip()) == 15 and len(d2.split(':')[1].strip()) == 15:
         if d1.split(':')[1].strip()[0:10] != d2.split(':')[1].strip()[0:10]:
             res = d1.strip() + ' ' + d2.strip()
-    # PCF号段类型为MSISDN(共13位，判断前九位是否一致认为时非法号段)
+    # PCF号段类型为MSISDN(共13位，判断前八位是否一致认为时非法号段)
     if len(d1.split(':')[1].rstrip(',').strip()) == 13 and len(d2.split(':')[1].strip()) == 13:
         if d1.split(':')[1].strip()[0:8] != d2.split(':')[1].strip()[0:8]:
             res = d1.strip() + ' ' + d2.strip()
@@ -127,7 +127,7 @@ def illegalRule(d1, d2, networkType):
 
 # 解析文件，将数据放入到dict中，key表示nfInstanceId=nfType=netwokType，value表示非法号段
 def txtAnalysis(filePath):
-    logging.info('begin to analysis mml file')
+    logging.info('begin to analysis mml file,%s', filePath)
     try:
         dataListTmp = []
         dataList = []
@@ -137,7 +137,6 @@ def txtAnalysis(filePath):
             dataLists.append(line.decode().strip('\n\t\r').replace('"', ''))
 
         # 将数据按照‘nfInstanceId’分割
-        NFID = ''
         for dts in dataLists:
             if 'MENAME:' in dts:
                 if len(dataListTmp):
@@ -152,7 +151,6 @@ def txtAnalysis(filePath):
         # 循环遍历各数组
         illegaldic = {}
         for dList in dataList:
-            nameflag = 0
             idflag = 0
             illegalList = []
             netwokType = ''
@@ -174,7 +172,6 @@ def txtAnalysis(filePath):
                     dt4 = dList[dt + 15]
 
                 if 'NFID=' in dList[dt] and idflag == 0:
-                    # nfInstanceId = str(dList[0].split('NFID=')[1].rstrip(',').strip().split('-')[-1][0:6])
                     nfInstanceId = str(dList[dt].split('NFID=')[1].split(';')[0].split('-')[-1][0:6])
                     # print(nfInstanceId)
                     idflag = 1
@@ -216,7 +213,7 @@ def txtAnalysis(filePath):
     finally:
         if file:
             file.close()
-    logging.info('end analysis mml file')
+    logging.info('end analysis mml file,%s', filePath)
     return illegaldic
 
 
@@ -389,7 +386,7 @@ def main():
         mmlFileList = TXTFileList()
         if len(mmlFileList):
             logging.info('analysis file list:%s', mmlFileList)
-            for f in TXTFileList():
+            for f in mmlFileList:
                 # 文件分析，提取所需数据
                 illegaldic = txtAnalysis(f)
 
