@@ -2,6 +2,7 @@
 import os
 import logging
 import xlwt
+from operator import itemgetter
 
 logging.basicConfig(filename='mylog.txt', format="%(asctime)s : %(message)s",
                     level=logging.DEBUG)
@@ -154,7 +155,7 @@ def txtAnalysis(filePath):
             idflag = 0
             illegalList = []
             netwokType = ''
-            nfInstanceId = ''
+            uuid = ''
             segNum = 0
             # 获取网络类型
             if 'MENAME:' in dList[0]:
@@ -172,7 +173,7 @@ def txtAnalysis(filePath):
                     dt4 = dList[dt + 15]
 
                 if 'NFID=' in dList[dt] and idflag == 0:
-                    nfInstanceId = str(dList[dt].split('NFID=')[1].split(';')[0].split('-')[-1][0:6])
+                    uuid = str(dList[dt].split('NFID=')[1].split(';')[0])
                     # print(nfInstanceId)
                     idflag = 1
 
@@ -193,17 +194,17 @@ def txtAnalysis(filePath):
                         illegalList.append(illegalSeg3)
 
             keyflag = 0
-            # key： [nfInstanceId=nfType]     value： [非法号段]
+            # key： [uuid:nfType=segNum]     value： [非法号段]
             for dickey in illegaldic:
-                if nfInstanceId in dickey:
+                if uuid in dickey:
                     key = dickey.split('=')[0] + '=' + str(int(dickey.split('=')[1]) + segNum)
                     illegaldic[key] = illegaldic.pop(dickey)
                     illegaldic[key].extend(illegalList)
                     keyflag = 1
                     break
             if keyflag == 0:
-                if nfInstanceId != '':
-                    key = str(nfInstanceId) + ':' + str(netwokType) + '=' + str(segNum)
+                if uuid != '':
+                    key = str(uuid) + ':' + str(netwokType) + '=' + str(segNum)
                     illegaldic[key] = illegalList
 
         # for key in illegaldic:
@@ -258,12 +259,16 @@ def SetFont(type):
     return style
 
 
-def MatchData(nfID):
-    NFType = str(nfID[0:2].upper())
+def MatchData(illData, illDataValue):
     MDataDict = {}
+    MDataDict['uuid'] = illData.split(':')[0]
+    MDataDict['networkType'] = illData.split(':')[1].split('=')[0]
+    MDataDict['segNum'] = illData.split('=')[1]
+    MDataDict['illegalSegment'] = illDataValue
+    nfID = illData.split(':')[0].split('-')[-1][0:6]
+    NFType = str(nfID[0:2].upper())
     region = str(nfID[2:4].upper())
     province = str(nfID[4:6].upper())
-    NetwokType = str(nfID[6:8].upper())
     flag = 0
     for NFTyeKey in NFTypeDict:
         if NFType == NFTyeKey:
@@ -290,15 +295,15 @@ def MatchData(nfID):
                     break
     if flag == 0:
         MDataDict['province'] = ''
-    flag = 0
-    for NetwokTypeKey in NetwokType:
-        if NetwokType == NetwokTypeKey:
-            MDataDict['NetwokType'] = NetwokType[NetwokTypeKey]
-            flag = 1
-            break
-    if flag == 0:
-        MDataDict['NetwokType'] = ''
     return MDataDict
+
+
+def sortData(illegalData):
+    illDataTmp = []
+    for illData in illegalData:
+        illDataTmp.append(MatchData(illData, illegalData[illData]))
+    illDataList = sorted(illDataTmp, key=lambda r: (r['NFType'], r['region'], r['province']))
+    return illDataList
 
 
 def XLSWrite(XLSPath, illegalData):
@@ -310,56 +315,54 @@ def XLSWrite(XLSPath, illegalData):
     sht1 = xls.add_sheet('非法号段信息')
     # 第一个参数是行，第二个参数是列，第三个参数是值,第四个参数是格式
     headFont = SetFont(1)
-    bodyFont1 = SetFont(3)  # 垂直居中
     bodyFont2 = SetFont(4)  # 水平垂直居中
 
     sht1.write(0, 0, '网元类型', headFont)
     sht1.write(0, 1, '大区', headFont)
     sht1.write(0, 2, '省份', headFont)
     sht1.write(0, 3, '网络类型', headFont)
-    sht1.write(0, 4, '号段总数', headFont)
-    sht1.write(0, 5, '冲突号段', headFont)
+    sht1.write(0, 4, 'NFID', headFont)
+    sht1.write(0, 5, '号段总数', headFont)
+    sht1.write(0, 6, '非法号段', headFont)
 
     shtNum1 = 1
 
     # 数据写入
     # sheet1
     rowBegin = 1
-    # print(len(illegalData))
     for illData in illegalData:
-        # print(illData,' ', illegalData[illData])
-        MdataDict = MatchData(illData.split(':')[0])
-        networkType = illData.split(':')[1].split('=')[0]
-        segNum = illData.split('=')[1]
+        illegalSegment = illData['illegalSegment']
         nType = ''
-        if networkType == 'C':
+        if illData['networkType'] == 'C':
             nType = '人网'
-        if networkType == 'B':
+        if illData['networkType'] == 'B':
             nType = '物网'
 
-        if len(illegalData[illData]):
-            if len(MdataDict['NFType']) and len(MdataDict['region']):
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 0, 0, MdataDict['NFType'],
+        if len(illegalSegment):
+            if len(illData['NFType']) and len(illData['region']):
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 0, 0, illData['NFType'],
                                  bodyFont2)
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 1, 1, MdataDict['region'],
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 1, 1, illData['region'],
                                  bodyFont2)
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 2, 2, MdataDict['province'],
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 2, 2, illData['province'],
                                  bodyFont2)
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 3, 3, nType, bodyFont2)
-                sht1.write_merge(rowBegin, rowBegin + len(illegalData[illData]) - 1, 4, 4, segNum, bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 3, 3, nType, bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 4, 4, illData['uuid'], bodyFont2)
+                sht1.write_merge(rowBegin, rowBegin + len(illegalSegment) - 1, 5, 5, illData['segNum'], bodyFont2)
                 shtNum1 = rowBegin
-                for ld in illegalData[illData]:
-                    sht1.write(shtNum1, 5, ld, bodyFont2)
+                for ld in illegalSegment:
+                    sht1.write(shtNum1, 6, ld, bodyFont2)
                     shtNum1 = shtNum1 + 1
-                rowBegin += len(illegalData[illData])
+                rowBegin += len(illegalSegment)
         else:
-            if len(MdataDict['NFType']) and len(MdataDict['region']):
-                sht1.write(rowBegin, 0, MdataDict['NFType'], bodyFont2)
-                sht1.write(rowBegin, 1, MdataDict['region'], bodyFont2)
-                sht1.write(rowBegin, 2, MdataDict['province'], bodyFont2)
+            if len(illData['NFType']) and len(illData['region']):
+                sht1.write(rowBegin, 0, illData['NFType'], bodyFont2)
+                sht1.write(rowBegin, 1, illData['region'], bodyFont2)
+                sht1.write(rowBegin, 2, illData['province'], bodyFont2)
                 sht1.write(rowBegin, 3, nType, bodyFont2)
-                sht1.write(rowBegin, 4, segNum, bodyFont2)
-                sht1.write(rowBegin, 5, 'NULL', bodyFont2)
+                sht1.write(rowBegin, 4, illData['uuid'], bodyFont2)
+                sht1.write(rowBegin, 5, illData['segNum'], bodyFont2)
+                sht1.write(rowBegin, 6, 'NULL', bodyFont2)
                 rowBegin += 1
 
     xls.save(XLSPath)
@@ -390,8 +393,9 @@ def main():
                 # 文件分析，提取所需数据
                 illegaldic = txtAnalysis(f)
 
+                illDataList = sortData(illegaldic)
                 # 数据输出写入xls
-                XLSWrite(os.getcwd() + '\\illegalSegment' + str(rNum) + '.xls', illegaldic)
+                XLSWrite(os.getcwd() + '\\illegalSegment' + str(rNum) + '.xls', illDataList)
                 rNum += 1
         else:
             logging.error('there is no mml file,please check!')
