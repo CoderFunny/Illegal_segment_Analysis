@@ -248,15 +248,38 @@ def SetFont(type):
         pattern.pattern_fore_colour = xlwt.Style.colour_map['yellow']
         style.pattern = pattern
     elif type == 3:
-        # 设置垂直居中
-        al.vert = 0x01  # 设置垂直居中
+        # 设置左端对齐
+        al.vert = 0x00  # 设置上端对齐
+        al.horz = 0x01  # 设置左端对齐
         style.alignment = al
+        style.alignment.wrap = 1
     elif type == 4:
         # 水平垂直居中
         al.horz = 0x02  # 设置水平居中
         al.vert = 0x01  # 设置垂直居中
         style.alignment = al
     return style
+
+
+def illegalRuleDes():
+    str = """
+非法号段判断规则描述：
+    1.	IMSI类型号段（例："start": "460015410700000","end": "460015410799999"）
+        规则：总长度15位，比较前10位是否相同，如果不相同认为是非法号段（十万号段）
+    2.	MSISDN类型号段（例：start: "8613255540000", end: "8613255549999"）
+        规则：总长度13位，比较前8位是否相同，如果不相同认为是非法号段（十万号段）
+    3.	TAC类型号段（例："start": "750000","end": "7affff"）
+        规则：总长度6位，不超过对应范围
+        a.	人网，不超过如下范围：
+            广东:	750000~7AFFFF，810000~86FFFF
+        b.	物网，不超过如下范围：
+            广东:	750000~7AFFFF，810000~86FFFF
+            湖南:	870000~89FFFF，8D0000~8DFFFF
+            广西:	B30000~B5FFFF，BA0000~BAFFFF
+            福建:	5E0000~60FFFF，680000~68FFFF
+            海南:	C00000~C0FFFF，C20000~C2FFFF`
+"""
+    return str
 
 
 def MatchData(illData, illDataValue):
@@ -312,11 +335,12 @@ def XLSWrite(XLSPath, illegalData):
     # 实例化一个execl对象xls=工作薄
     xls = xlwt.Workbook()
     # 实例化一个工作表，名叫Sheet1
-    sht1 = xls.add_sheet('非法号段信息')
+    sht1 = xls.add_sheet(u'非法号段信息')
+    sht2 = xls.add_sheet(u'非法号段判断规则')
     # 第一个参数是行，第二个参数是列，第三个参数是值,第四个参数是格式
     headFont = SetFont(1)
+    bodyFont1 = SetFont(3)  # 水平左端对齐
     bodyFont2 = SetFont(4)  # 水平垂直居中
-
     sht1.write(0, 0, '网元类型', headFont)
     sht1.write(0, 1, '大区', headFont)
     sht1.write(0, 2, '省份', headFont)
@@ -324,6 +348,10 @@ def XLSWrite(XLSPath, illegalData):
     sht1.write(0, 4, 'NFID', headFont)
     sht1.write(0, 5, '号段总数', headFont)
     sht1.write(0, 6, '非法号段', headFont)
+    sht2.write(0, 0, illegalRuleDes(), bodyFont1)
+    sht2.col(0).width = 256 * 80
+    sht2.row(0).height_mismatch = True
+    sht2.row(0).height = 120 * 40
 
     shtNum1 = 1
 
